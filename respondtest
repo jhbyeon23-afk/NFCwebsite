@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>반응속도 테스트</title>
+<link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--idle:#34408a;--wait:#b8322f;--go:#2fbf71;--early:#7a4bb0;--ink:#fff;--go-ink:#083a20;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--idle:#262e6b;--wait:#932623;--early:#5d3785}}
+:root[data-theme="dark"]{--idle:#262e6b;--wait:#932623;--early:#5d3785}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--idle);font-family:"Noto Sans KR",system-ui,sans-serif;color:var(--ink);transition:background .15s}
+body.wait{background:var(--wait)}
+body.go{background:var(--go);color:var(--go-ink)}
+body.early{background:var(--early)}
+#app{all:unset;display:flex;flex-direction:column;justify-content:space-between;width:100%;height:100%;padding:20px;cursor:pointer;touch-action:manipulation;user-select:none;-webkit-user-select:none}
+#app:focus-visible{outline:4px solid currentColor;outline-offset:-8px}
+.top{display:flex;justify-content:space-between;font-size:15px;font-weight:700;opacity:.85}
+.mid{text-align:center}
+#big{font-family:"Do Hyeon","Noto Sans KR",sans-serif;font-size:clamp(56px,20vw,120px);line-height:1.05;margin:0;word-break:keep-all}
+#sub{margin:14px auto 0;max-width:22em;font-size:17px;line-height:1.5;opacity:.9}
+#hist{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;min-height:38px}
+.chip{font-family:"Do Hyeon",sans-serif;font-size:18px;padding:6px 12px;border-radius:999px;border:2px solid currentColor}
+@media (prefers-reduced-motion:reduce){body{transition:none}}
+</style>
+</head>
+<body class="idle">
+<button id="app" type="button" aria-live="polite">
+  <div class="top"><span id="rd">5번 측정해요</span><span id="best"></span></div>
+  <div class="mid"><h1 id="big">탭해서 시작</h1><p id="sub">화면이 초록색으로 바뀌는 순간 최대한 빨리 누르세요.</p></div>
+  <div id="hist"></div>
+</button>
+<script>
+const N=5, $=id=>document.getElementById(id);
+const app=$('app'),big=$('big'),sub=$('sub'),rd=$('rd'),bestEl=$('best'),hist=$('hist');
+let state='idle',times=[],timer=null,t0=0,lock=0,best=null;
+try{best=parseInt(localStorage.getItem('rt-best'),10)||null}catch(e){}
+
+function paint(s,cls,b,t){
+  state=s;document.body.className=cls;big.textContent=b;sub.textContent=t;
+  rd.textContent=times.length<N?`라운드 ${Math.min(times.length+1,N)} / ${N}`:'측정 끝';
+  bestEl.textContent=best?`최고 ${best}ms`:'';
+  hist.textContent='';
+  times.forEach(x=>{const c=document.createElement('span');c.className='chip';c.textContent=x+'ms';hist.appendChild(c)});
+}
+function rate(a){
+  return a<200?'번개 수준이에요.':a<250?'매우 빨라요.':a<300?'평균보다 빨라요.':a<400?'평균 정도예요.':'조금 느려요. 한 번 더 도전해 보세요.';
+}
+function startRound(){
+  paint('wait','wait','기다리세요','초록색이 되면 바로 누르세요.');
+  timer=setTimeout(()=>{t0=performance.now();paint('go','go','지금!','')},1200+Math.random()*2800);
+}
+function press(){
+  const now=performance.now();
+  if(now<lock)return;
+  if(state==='idle'||state==='result'||state==='early'){startRound();return}
+  if(state==='wait'){
+    clearTimeout(timer);lock=now+300;
+    paint('early','early','너무 빨라요','초록색이 되기 전에 눌렀어요. 탭해서 이 라운드를 다시 하세요.');return;
+  }
+  if(state==='go'){
+    const ms=Math.round(now-t0);times.push(ms);
+    if(!best||ms<best){best=ms;try{localStorage.setItem('rt-best',String(ms))}catch(e){}}
+    lock=now+300;
+    if(times.length<N){paint('result','idle',ms+'ms','탭해서 다음 라운드로 가세요.');return}
+    const avg=Math.round(times.reduce((a,b)=>a+b,0)/N);
+    lock=now+600;
+    paint('final','idle','평균 '+avg+'ms',rate(avg)+' 탭해서 다시 시작하세요.');return;
+  }
+  if(state==='final'){times=[];startRound()}
+}
+app.addEventListener('pointerdown',e=>{e.preventDefault();press()});
+app.addEventListener('click',e=>{if(e.detail===0)press()});
+paint('idle','idle','탭해서 시작','화면이 초록색으로 바뀌는 순간 최대한 빨리 누르세요.');
+</script>
+</body>
+</html>
